@@ -1,5 +1,6 @@
 import argparse
 from Bio import SeqIO
+import re
 import bio_script
 import trans_model
 import trans_data
@@ -444,6 +445,13 @@ def plasme_output(rst_path, blastn_rst, contig_path, ident_thres, cov_thres, pre
     contig_seq_index = SeqIO.index(contig_path, 'fasta')
     out_info = open(f"{output_path}_report.csv", 'w')
 
+    # Build mapping from contig number (e.g. "13") to full FASTA header
+    contig_id_map = {}
+    for key in contig_seq_index.keys():
+        match = re.search(r'\b(\d+)\b', key)
+        if match:
+            contig_id_map[match.group(1)] = key
+
     # load blastn results
     query_set = set()
     query_ref_dict = {}
@@ -452,19 +460,27 @@ def plasme_output(rst_path, blastn_rst, contig_path, ident_thres, cov_thres, pre
             l = l.strip().split()
             query, ref = l[0], l[1]
             if query not in query_set:
-                query_ref_dict[query] = ref
+                query_ref_dict[str(query)] = ref
                 query_set.add(query)
 
     out_info.write(f"contig\tlength\treference\torder\tevidence\tscore\tamb_region\n")
 
     for order, contig, ident_v, cov_v, pred_v, overlap in zip(rst_df['order'], rst_df['query'], 
-                                                    rst_df['identity'], rst_df['coverage'], 
-                                                    rst_df['PLASMe'], rst_df['overlap']):
+                                                              rst_df['identity'], rst_df['coverage'], 
+                                                              rst_df['PLASMe'], rst_df['overlap']):
+
+        # Try to map contig number to FASTA ID
+        contig_str = str(contig)
+        if contig_str not in contig_id_map:
+            print(f"Warning: Contig {contig} not found in FASTA file, skipping.")
+            continue
+        contig_key = contig_id_map[contig_str]
+
         if ident_v >= ident_thres and cov_v >= cov_thres:
-            pred_plasmid.append(contig)
+            pred_plasmid.append(contig_key)
         else:
             if pred_v > pred_thres:
-                pred_plasmid.append(contig)
+                pred_plasmid.append(contig_key)
 
         # parse the overlap
         overlap_info = overlap.split(' ')
@@ -472,10 +488,6 @@ def plasme_output(rst_path, blastn_rst, contig_path, ident_thres, cov_thres, pre
         for site in overlap_info:
             if '-' in site:
                 overlap_site_list.append([int(i) for i in site.split('-')])
-        # if len(overlap_site_list) > 0:
-        #     pred_plasmid_overlap_dict[contig] = merge_ranges(overlap_site_list)
-        # else:
-        #     pred_plasmid_overlap_dict[contig] = []
 
         evidence, score = '', ''
         if pred_v > 0:
@@ -491,17 +503,16 @@ def plasme_output(rst_path, blastn_rst, contig_path, ident_thres, cov_thres, pre
             for m_e in m:
                 out_m.append('-'.join([str(i) for i in m_e]))
 
-        if contig in pred_plasmid:
-            out_info.write(f"{contig}\t{len(contig_seq_index[contig].seq)}\t{query_ref_dict[contig]}\t{order}\t{evidence}\t{score}\t{','.join(out_m)}\n")
+        if contig_key in pred_plasmid:
+            ref = query_ref_dict.get(str(contig), "NA")
+            out_info.write(f"{contig_key}\t{len(contig_seq_index[contig_key].seq)}\t{ref}\t{order}\t{evidence}\t{score}\t{','.join(out_m)}\n")
 
     output_seqs = []
     for s in SeqIO.parse(contig_path, 'fasta'):
         if s.id in pred_plasmid:
-            # s.description = pred_plasmid_overlap_dict[s.id]
             output_seqs.append(s)
 
     SeqIO.write(output_seqs, output_path, 'fasta')
-
     print(f"Finished. The identified plasmid contigs are saved in {output_path}.")
     out_info.close()
 
