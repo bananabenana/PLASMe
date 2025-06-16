@@ -134,7 +134,7 @@ def plasme_db(keep_zip=False, num_threads=8):
         if f_md5 != db_md5:
             print(f"DB.zip is incomplete or corrupted, redownload DB.zip ... ")
             try:
-                subprocess.check_output(f"curl {curl_link} --output {db_zip_path}", shell=True)
+                subprocess.check_output(f"curl -L {curl_link} --output {db_zip_path}", shell=True)
             except subprocess.CalledProcessError:
                 download_db(curl_link, out_path=db_zip_path)
             print(f"Verifying md5 ... ")
@@ -145,7 +145,7 @@ def plasme_db(keep_zip=False, num_threads=8):
     else:
         print(f"Downloading DB.zip ... ")
         try:
-            subprocess.check_output(f"curl {curl_link} --output {db_zip_path}", shell=True)
+            subprocess.check_output(f"curl -L {curl_link} --output {db_zip_path}", shell=True)
         except subprocess.CalledProcessError:
             download_db(curl_link, out_path=db_zip_path)
         print(f"Verifying md5 ... ")
