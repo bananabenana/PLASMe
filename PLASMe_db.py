@@ -32,6 +32,19 @@ def plasmedb_cmd():
     return plasmedb_args
 
 
+def download_db_multithreaded(url, output, threads=48):
+    """Download using axel if available, otherwise fallback to requests."""
+    if shutil.which("axel"):
+        print("Using axel for multithreaded download...")
+        result = subprocess.run(["axel", "-n", str(threads), "-a", "-o", output, url])
+        if result.returncode != 0:
+            print("Axel download failed, falling back to requests...")
+            download_db(url, out_path=output)
+    else:
+        print("Axel not found, falling back to requests...")
+        download_db(url, out_path=output)
+
+
 def connect(host='https://www.google.com/'):
     try:
         urllib.request.urlopen(host)
@@ -133,10 +146,7 @@ def plasme_db(keep_zip=False, num_threads=8):
         f_md5 = check_md5(file_path=db_zip_path)
         if f_md5 != db_md5:
             print(f"DB.zip is incomplete or corrupted, redownload DB.zip ... ")
-            try:
-                subprocess.check_output(f"curl -L {curl_link} --output {db_zip_path}", shell=True)
-            except subprocess.CalledProcessError:
-                download_db(curl_link, out_path=db_zip_path)
+            download_db_multithreaded(curl_link, db_zip_path, threads=num_threads)
             print(f"Verifying md5 ... ")
             f_md5 = check_md5(file_path=db_zip_path)
             if f_md5 != db_md5:
@@ -144,10 +154,7 @@ def plasme_db(keep_zip=False, num_threads=8):
     
     else:
         print(f"Downloading DB.zip ... ")
-        try:
-            subprocess.check_output(f"curl -L {curl_link} --output {db_zip_path}", shell=True)
-        except subprocess.CalledProcessError:
-            download_db(curl_link, out_path=db_zip_path)
+        download_db_multithreaded(curl_link, db_zip_path, threads=num_threads)
         print(f"Verifying md5 ... ")
         f_md5 = check_md5(file_path=db_zip_path)
         if f_md5 != db_md5:
